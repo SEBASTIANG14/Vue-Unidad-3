@@ -53,6 +53,20 @@
           <button @click="addUser">Add user</button>
         </div>
       </div>
+
+      <div v-if="showEditModal" class="modal">
+        <div class="modal-content">
+          <span class="close" @click="showEditModal = false">&times;</span>
+          <h2>Edit user</h2>
+          <label>Name</label>
+          <input v-model="editUserData.name" type="text" placeholder="Name" />
+          <label>Username</label>
+          <input v-model="editUserData.username" type="text" placeholder="Username" />
+          <label>Phone</label>
+          <input v-model="editUserData.phone" type="text" placeholder="Cellphone"/>
+          <button @click="updateUser">Update user</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -68,6 +82,9 @@ export default {
     const users = ref([])
     const showModal = ref(false)
     const newUser = ref({ name: '', username: '', phone: '' })
+    const showEditModal = ref(false)  
+    const editUserData = ref({})  
+    let selectedUserId = ref(null) 
 
     onMounted(() => {
       const session = localStorage.getItem("user_log")
@@ -105,7 +122,19 @@ export default {
     }
 
     const editUser = (user) => {
+      selectedUserId.value = user.id  
+      editUserData.value = { ...user } 
+      showEditModal.value = true
+    }
 
+    const updateUser = () => {
+      const index = users.value.findIndex(user => user.id === selectedUserId.value)
+      if (index !== -1) {
+        users.value[index] = { ...editUserData.value, id: selectedUserId.value }
+        localStorage.setItem("user_log", JSON.stringify(users.value))
+        showEditModal.value = false
+        alert('Usuario actualizado.')
+      }
     }
 
     const addUser = () => {
@@ -135,6 +164,9 @@ export default {
       newUser,
       showModal,
       logout,
+      editUserData,
+      showEditModal,
+      updateUser,
     }
   },
 }
@@ -244,5 +276,59 @@ button {
   outline: none;
   box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
 }
+
+button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.3s, box-shadow 0.3s;
+  margin-right: 5px;
+  background-color: #ed84ff;
+}
+
+button.add-btn {
+  color: white;
+}
+
+button.add-btn:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+button.edit-btn {
+  color: white;
+}
+
+button.edit-btn:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+button.delete-btn:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table, th, td {
+  border: 1px solid black;
+}
+
+th, td {
+  padding: 12px;
+  text-align: left;
+}
+
+th {
+  background-color: #96faff;
+}
+
+tbody tr:hover {
+  background-color: #f1f1f1;
+}
+
 
 </style>
