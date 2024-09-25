@@ -3,8 +3,8 @@
     <h1>Login Perrón</h1>
     <form @submit.prevent="onSubmit" v-if="!access">
       <fieldset>
-        <label>Correo</label>
-        <input v-model="email" type="email" placeholder="Escribe tu correo aquí" required />
+        <label>Usuario</label>
+        <input v-model="username" type="text" placeholder="Escribe tu usuario TMDB aquí" required />
       </fieldset>
       <fieldset>
         <label>Contraseña</label>
@@ -15,56 +15,29 @@
 
     <div class="bienvenida" v-if="access">
       <h1>Hola, bienvenido!</h1>
-      <button @click="showModal = true">Add</button>
-      <button @click="logout">Cerrar sesión</button>
-      
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Username</th>
-            <th>Phone</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="user in users" :key="user.id">
-            <td>{{ user.name }}</td>
-            <td>{{ user.username }}</td>
-            <td>{{ user.phone }}</td>
-            <td>
-              <button @click="editUser(user)">Edit</button>
-              <button @click="deleteUser(user.id)">Delete</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <button @click="logout" class="logout-btn">Cerrar sesión</button>
 
-      <div v-if="showModal" class="modal">
-        <div class="modal-content">
-          <span class="close" @click="showModal = false">&times;</span>
-          <h2>New user</h2>
-          <label>Name</label>
-          <input v-model="newUser.name" type="text" placeholder="Name" />
-          <label>Username</label>
-          <input v-model="newUser.username" type="text" placeholder="Username" />
-          <label>Phone</label>
-          <input v-model="newUser.phone" type="text" placeholder="Cellphone"/>
-          <button @click="addUser">Add user</button>
-        </div>
-      </div>
+      <div class="movies">
+        <h2>Películas Populares</h2>
+        <div class="movie-list">
+          <div v-for="movie in movies" :key="movie.id" class="movie-item">
+            <h3>{{ movie.title }}</h3>
+            <p>{{ movie.overview }}</p>
+            <img :src="'https://image.tmdb.org/t/p/w500' + movie.poster_path" alt="Poster de {{ movie.title }}">
 
-      <div v-if="showEditModal" class="modal">
-        <div class="modal-content">
-          <span class="close" @click="showEditModal = false">&times;</span>
-          <h2>Edit user</h2>
-          <label>Name</label>
-          <input v-model="editUserData.name" type="text" placeholder="Name" />
-          <label>Username</label>
-          <input v-model="editUserData.username" type="text" placeholder="Username" />
-          <label>Phone</label>
-          <input v-model="editUserData.phone" type="text" placeholder="Cellphone"/>
-          <button @click="updateUser">Update user</button>
+            <div class="rating-section">
+              <label for="rating">Calificación (10-100):</label>
+              <input 
+                type="number" 
+                v-model.number="movie.userRating" 
+                min="10" 
+                max="100" 
+                step="10" 
+              />
+              <button @click="rateMovie(movie.id, movie.userRating)" class="rate-btn">Agregar calificación</button>
+              <button @click="removeRate(movie.id)" class="remove-rate-btn">Eliminar calificación</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -72,263 +45,237 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 
 export default {
   setup() {
-    const email = ref('')
+    const username = ref('')
     const password = ref('')
     const access = ref(false)
-    const users = ref([])
-    const showModal = ref(false)
-    const newUser = ref({ name: '', username: '', phone: '' })
-    const showEditModal = ref(false)  
-    const editUserData = ref({})  
-    let selectedUserId = ref(null) 
+    const movies = ref([])
+    const apiKey = "7dbf2be7efbc38c8a5ba78d99ae9f933"
+    let requestToken = ref('')
 
-    onMounted(() => {
-      const session = localStorage.getItem("user_log")
-      if (session) {
-        access.value = true
-        users.value = JSON.parse(session)
-      }
-    })
+    const session_id = ref(localStorage.getItem('session_id'))
+
+    const getRequestToken = () => {
+      return fetch(`https://api.themoviedb.org/3/authentication/token/new?api_key=${apiKey}`)
+        .then(response => response.json())
+        .then(data => {
+          requestToken.value = data.request_token
+        })
+        .catch(error => {
+          console.error('Error al obtener el request token:', error)
+        })
+    }
 
     const onSubmit = () => {
-      fetch('/users.json')
-        .then((res) => res.json())
-        .then((data) => {
-          const user = data.find(
-            (user) => user.email === email.value && user.password === password.value
-          )
+      getRequestToken().then(() => {
+        const loginData = JSON.stringify({
+          username: username.value,
+          password: password.value,
+          request_token: requestToken.value
+        })
 
-          if (user) {
+        fetch(`https://api.themoviedb.org/3/authentication/token/validate_with_login?api_key=${apiKey}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: loginData
+        })
+          .then(response => response.json())
+          .then(result => {
+            if (result.success) {
+              createSession()
+            } else {
+              alert('Usuario o contraseña incorrectos')
+            }
+          })
+          .catch(error => {
+            console.error('Error en la autenticación:', error)
+          })
+      })
+    }
+
+    const createSession = () => {
+      const sessionData = JSON.stringify({
+        request_token: requestToken.value
+      })
+
+      fetch(`https://api.themoviedb.org/3/authentication/session/new?api_key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: sessionData
+      })
+        .then(response => response.json())
+        .then(result => {
+          if (result.success) {
             access.value = true
-            users.value = data
-            localStorage.setItem("user_log", JSON.stringify(data))
+            session_id.value = result.session_id
+            localStorage.setItem('session_id', session_id.value)
+            fetchMovies()
           } else {
-            alert('Correo o contraseña incorrectos')
+            alert('No se pudo crear la sesión')
           }
         })
-        .catch((e) => {
-          alert('Ocurrió un error: ' + e.message)
+        .catch(error => {
+          console.error('Error al crear la sesión:', error)
         })
     }
 
-    const deleteUser = (id) => {
-      users.value = users.value.filter(user => user.id !== id)
-      localStorage.setItem("user_log", JSON.stringify(users.value))
-      alert('Usuario eliminado.')
+    const fetchMovies = () => {
+      const url = `https://api.themoviedb.org/3/movie/popular?api_key=${apiKey}&language=es-MX&page=1`
+      fetch(url)
+        .then((res) => res.json())
+        .then((data) => {
+          movies.value = data.results.map(movie => ({
+            ...movie,
+            userRating: 10 
+          }))
+        })
+        .catch((e) => {
+          console.error('Error al obtener las películas:', e)
+        })
     }
 
-    const editUser = (user) => {
-      selectedUserId.value = user.id  
-      editUserData.value = { ...user } 
-      showEditModal.value = true
-    }
-
-    const updateUser = () => {
-      const index = users.value.findIndex(user => user.id === selectedUserId.value)
-      if (index !== -1) {
-        users.value[index] = { ...editUserData.value, id: selectedUserId.value }
-        localStorage.setItem("user_log", JSON.stringify(users.value))
-        showEditModal.value = false
-        alert('Usuario actualizado.')
+    const rateMovie = (movieId, rating) => {
+      if (rating < 10 || rating > 100) {
+        alert('La calificación debe estar entre 10 y 100')
+        return
       }
+
+      const rateData = JSON.stringify({
+        value: rating / 10 
+      })
+
+      fetch(`https://api.themoviedb.org/3/movie/${movieId}/rating?api_key=${apiKey}&session_id=${session_id.value}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: rateData
+      })
+        .then(response => response.json())
+        .then(result => {
+          if (result.success) {
+            alert('Calificación agregada con éxito')
+          } else {
+            alert('No se pudo agregar la calificación')
+          }
+        })
+        .catch(error => {
+          console.error('Error al agregar la calificación:', error)
+        })
     }
 
-    const addUser = () => {
-      const id = users.value.length + 1 
-      const user = { ...newUser.value, id }
-      users.value.push(user) 
-      localStorage.setItem("user_log", JSON.stringify(users.value))
-      newUser.value = { name: '', username: '', phone: '' }
-      showModal.value = false
-      alert('Usuario agregado.')
+    const removeRate = (movieId) => {
+      fetch(`https://api.themoviedb.org/3/movie/${movieId}/rating?api_key=${apiKey}&session_id=${session_id.value}`, {
+        method: 'DELETE'
+      })
+        .then(response => response.json())
+        .then(result => {
+          if (result.success) {
+            alert('Calificación eliminada con éxito')
+          } else {
+            alert('No se pudo eliminar la calificación')
+          }
+        })
+        .catch(error => {
+          console.error('Error al eliminar la calificación:', error)
+        })
     }
 
     const logout = () => {
       access.value = false
-      localStorage.removeItem("user_log")
+      localStorage.removeItem("session_id")
     }
 
     return {
-      email,
+      username,
       password,
       access,
       onSubmit,
-      users,
-      deleteUser,
-      editUser,
-      addUser,
-      newUser,
-      showModal,
       logout,
-      editUserData,
-      showEditModal,
-      updateUser,
+      movies,
+      rateMovie,
+      removeRate
     }
-  },
+  }
 }
 </script>
 
 <style>
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-table, th, td {
-  border: 1px solid black;
-}
-th, td {
-  padding: 8px;
-  text-align: left;
-}
-th {
-  background-color: #96faff;
-}
-button {
-  margin-right: 5px;
-}
-
-/* Estilos del modal */
-/* Se lo pedi al chatgpt pa que se vea perron*/ 
-.modal {
+.movie-list {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  position: fixed;
-  z-index: 1;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  flex-wrap: wrap;
+  gap: 20px;
 }
 
-.modal-content {
-  background-color: #fff;
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  width: 400px;
-  max-width: 90%;
-  position: relative;
+.movie-item {
+  border: 1px solid #ccc;
+  padding: 10px;
+  width: 200px;
   text-align: center;
 }
 
-.close {
-  position: absolute;
-  top: 10px;
-  right: 15px;
-  color: #aaa;
-  font-size: 24px;
-  font-weight: bold;
-  cursor: pointer;
+.movie-item img {
+  max-width: 100%;
+  height: auto;
 }
 
-.close:hover,
-.close:focus {
-  color: #000;
-  text-decoration: none;
-  cursor: pointer;
+.rating-section {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.modal-content h2 {
-  font-size: 24px;
-  margin-bottom: 20px;
-  color: #333;
-}
-
-.modal-content label {
-  display: block;
-  font-size: 16px;
-  margin-bottom: 8px;
-  text-align: left;
-}
-
-.modal-content input {
-  width: 100%;
-  padding: 10px;
-  margin-bottom: 20px;
+.rating-section input {
+  width: 60px;
+  margin-bottom: 10px;
+  padding: 5px;
+  text-align: center;
   border: 1px solid #ccc;
   border-radius: 5px;
-  font-size: 16px;
 }
 
-.modal-content button {
+.rating-section button {
+  margin: 5px 0;
+  padding: 5px 10px;
+  background-color: #7dbcff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.rating-section button:hover {
+  background-color: #0056b3;
+}
+
+.rate-btn {
   background-color: #28a745;
+}
+
+.remove-rate-btn {
+  background-color: #dc3545;
+}
+
+.logout-btn {
+  background-color: #343a40;
   color: white;
-  padding: 10px 20px;
+  padding: 10px;
   border: none;
   border-radius: 5px;
-  font-size: 16px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: background-color 0.3s ease;
 }
 
-.modal-content button:hover {
-  background-color: #218838;
+.logout-btn:hover {
+  background-color: #23272b;
 }
-
-.modal-content input:focus {
-  border-color: #007bff;
-  outline: none;
-  box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
-}
-
-button {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 5px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background-color 0.3s, box-shadow 0.3s;
-  margin-right: 5px;
-  background-color: #ed84ff;
-}
-
-button.add-btn {
-  color: white;
-}
-
-button.add-btn:hover {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-button.edit-btn {
-  color: white;
-}
-
-button.edit-btn:hover {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-button.delete-btn:hover {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-table, th, td {
-  border: 1px solid black;
-}
-
-th, td {
-  padding: 12px;
-  text-align: left;
-}
-
-th {
-  background-color: #96faff;
-}
-
-tbody tr:hover {
-  background-color: #f1f1f1;
-}
-
-
 </style>
